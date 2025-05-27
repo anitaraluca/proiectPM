@@ -1,0 +1,85 @@
+#include <Wire.h>
+#include <LiquidCrystal_I2C.h>
+
+//pini
+const int PIR_PIN = 2;
+const int POT_PIN = A0;
+const int LED_RED = 4;
+const int LED_GREEN  = 3;
+
+LiquidCrystal_I2C lcd(0x27,16,2);
+
+unsigned long alertDuration = 5000;
+unsigned long alertStart = 0;
+bool alertActive = false;
+
+// pentru edge detection
+int lastPirState = LOW;
+
+void setup(){
+  pinMode(PIR_PIN, INPUT);
+  pinMode(POT_PIN, INPUT);
+  pinMode(LED_RED, OUTPUT);
+  pinMode(LED_GREEN, OUTPUT);
+
+  Wire.begin();
+  lcd.init();
+  lcd.backlight();
+
+  // stare initiala
+  digitalWrite(LED_RED, HIGH);
+  digitalWrite(LED_GREEN, LOW);
+  lcd.clear();
+  lcd.setCursor(0,0);
+  lcd.print("Initializing...");
+  delay(2000);
+  lcd.clear();
+  lcd.setCursor(0,0);
+  lcd.print("Nothing detected");
+}
+
+void loop(){
+  unsigned long now = millis();
+
+  //citește și mapează potențiometrul (1—10s)
+  int pot  = analogRead(POT_PIN);
+  alertDuration = map(pot, 0, 1023, 1000, 10000);
+
+  //citește PIR și detectează front LOW→HIGH
+  int pir = digitalRead(PIR_PIN);
+  bool risingEdge = (pir == HIGH && lastPirState == LOW);
+
+  //declanșare alertă
+  if (!alertActive && risingEdge) {
+    alertActive  = true;
+    alertStart   = now;
+    //actualizează LED-uri și LCD
+    digitalWrite(LED_RED, LOW);
+    digitalWrite(LED_GREEN, HIGH);
+    lcd.clear();
+    lcd.setCursor(0,0);
+    lcd.print("Something moved!");
+  }
+
+  lastPirState = pir;
+
+  //expirare alertă
+  if (alertActive && now - alertStart >= alertDuration) {
+    alertActive = false;
+    //update stare Idle
+    digitalWrite(LED_GREEN, LOW);
+    digitalWrite(LED_RED, HIGH);
+    lcd.clear();
+    lcd.setCursor(0,0);
+    lcd.print("No movement...");
+  }
+
+  //afișează durata
+  lcd.setCursor(0,1);
+  lcd.print("Check every ");
+  lcd.print(alertDuration/1000);
+  lcd.print("s   ");
+
+  //mic delay pentru stabilitate
+  delay(50);
+}
